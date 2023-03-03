@@ -2,8 +2,18 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 require('dotenv').config();
-const OpenAI = require('openai-api');
-const openai = new OpenAI(process.env.OPENAI_API_KEY);
+//const OpenAI = require('openai-api');
+
+const { Configuration, OpenAIApi } = require("openai");
+
+//const openai = new OpenAI(process.env.OPENAI_API_KEY);
+
+const configuration = new Configuration({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const openai = new OpenAIApi(configuration);
+
 // Require the redis package and create a Redis client
 const redis = require('redis');
 
@@ -34,7 +44,7 @@ redisClient.on('error', (error) => {
 
 const { MongoClient, ServerApiVersion } = require('mongodb');
 const mongoose = require('mongoose');
-const uri = 'mongodb+srv://Nuru:Gz3NAhTgxsvlBtmg@cluster0.wta1djn.mongodb.net/?retryWrites=true&w=majority';
+const uri = process.env.URL;
 //const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 var accountSid = process.env.TWILIO_ACCOUNT_SID; // Your Account SID from www.twilio.com/console
 var authToken = process.env.TWILIO_AUTH_TOKEN;   // Your Auth Token from www.twilio.com/console
@@ -108,7 +118,7 @@ const ConversationState = {
     switch (state) {
       case ConversationState.ASKING_FOR_NAME:
         // Ask for the user's name
-        await WA.sendMessage('Hello! What is your name?', phoneNumber);
+        await WA.sendMessage('Hello! What is your name? (Just type the name. For example: Sarah Mubiru)', phoneNumber);
         state = ConversationState.ASKING_FOR_AGE;
         break;
   
@@ -119,7 +129,7 @@ const ConversationState = {
           { name: message },
           { upsert: true }
         );
-        await WA.sendMessage(`Hi ${message}! What is your age?`, phoneNumber);
+        await WA.sendMessage(`Hi ${message}! What is your age? (Just type the age. For example:  25)`, phoneNumber);
         redisClient.set(phoneNumber, message)
         state = ConversationState.READY;
         break;
@@ -135,7 +145,7 @@ const ConversationState = {
 // Get the user's name from Redis
 redisClient.get(phoneNumber)
 .then(name => {
-  WA.sendMessage(`Welcome to NuruNet, ${name}! We're here to help you study and learn.`, phoneNumber);
+  WA.sendMessage(`Welcome to NuruNet, ${name}! We're here to help you study and learn. Ask me a question`, phoneNumber);
 })
 
        state = ConversationState.START;
@@ -166,7 +176,7 @@ redisClient.get(phoneNumber)
       const user = await User.findOne({ phoneNumber });
       if (!user) {
         // If the user is not found, ask for their name and age
-        await WA.sendMessage('Hello! What is your name?', phoneNumber);
+        await WA.sendMessage('Hello! What is your name? (Just type the name. For example "Sarah Mubiru")', phoneNumber);
         conversationState[phoneNumber] = ConversationState.ASKING_FOR_AGE;
         return;
       }
@@ -184,7 +194,7 @@ redisClient.get(phoneNumber)
   
       redisClient.get(phoneNumber)
       .then(name => {
-        const greetingMessage = `${greeting}, ${name}! How can I assist you?`;
+        const greetingMessage = `${greeting}, ${name}! How can I assist you? Ask me a question and tell me to explain it for you, Do you want an Analogy for a hard concept?, Just tell me the question and ask for one. Do you need some notes summaried?, Just give me the notes and tell me to summarise them `;
         WA.sendMessage(greetingMessage, phoneNumber);
       })
       .catch(err => {
@@ -206,23 +216,26 @@ redisClient.get(phoneNumber)
         }
     
         // Call OpenAI API to get the answer
-        const prompt = message;
-        const response = await openai.complete({
-          engine: "text-davinci-003",
-          prompt,
-          maxTokens: 100,
-          n: 1,
-          stop: '\n',
-          temperature: 0.7,
+        const promp = `Q: ${message}\nA: `;
+        const response = await openai.createCompletion({
+          model: "text-davinci-003",
+          prompt:promp,  
+          temperature: 0.8,
+          max_tokens:100,
+          top_p:1,
+          frequency_penalty: 0.0,
+          presence_penalty: 0.0,
+          stop: ["\n"],
+          
         });
-    
-        const answer = response.data.choices[0].text.trim();
+                                                  
+        const answer = response.data.choices[0].text;
     
         // Retrieve the user's name from Redis
-  const name = await redisClient.get(phoneNumber);
+ const name = await redisClient.get(phoneNumber);
         // Send the answer back to the user
 
-       await WA.sendMessage(`${name}, ${answer}`, phoneNumber);
+       await WA.sendMessage(`${name}, ${answer}` , phoneNumber);
 
       } catch (error) {
         // Handle the error here
@@ -238,7 +251,3 @@ webApp.listen(PORT, () => {
     console.log(`Server is up and running at ${PORT}`);
     console.log(process.env.PORT);
 });
-
-
-
-
